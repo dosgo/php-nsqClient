@@ -10,7 +10,7 @@ $ffi = FFI::cdef("
 ", "./libnsq_subscriber.so");
 
 // 启动 NSQ 订阅者
-$topic = "test11";
+$topic = "NINEKE_KAENG_LOG";
 $channel = "test1";
 $lookupdAddr = "192.168.203.212:5501";
 $ffi->StartNSQSubscriber($topic, $channel, $lookupdAddr,20,0);

@@ -1,0 +1,3 @@
+ZEND_BEGIN_MODULE_GLOBALS(libNsq)
+    // 这里定义全局变量字段
+ZEND_END_MODULE_GLOBALS(libNsq)

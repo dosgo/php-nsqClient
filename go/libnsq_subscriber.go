@@ -39,7 +39,7 @@ func (h *MessageHandler) HandleMessage(m *nsq.Message) error {
 }
 
 //export StartNSQSubscriber
-func StartNSQSubscriber(topic *C.char, channel *C.char, lookupdAddr *C.char, maxAttempts uint16, authResponse uint16) {
+func StartNSQSubscriber(topic *C.char, channel *C.char, lookupdAddr *C.char, maxAttempts uint16, authResponse uint16) C.int {
 	t := C.GoString(topic)
 	ch := C.GoString(channel)
 	addr := C.GoString(lookupdAddr)
@@ -55,7 +55,7 @@ func StartNSQSubscriber(topic *C.char, channel *C.char, lookupdAddr *C.char, max
 	if !ok {
 		consumer, err = nsq.NewConsumer(t, ch, config)
 		if err != nil {
-			log.Fatalf("Failed to create consumer for %s: %v", topicChan, err)
+			return -1
 		}
 		consumers[topicChan] = consumer
 	}
@@ -63,12 +63,12 @@ func StartNSQSubscriber(topic *C.char, channel *C.char, lookupdAddr *C.char, max
 	consumer.AddHandler(&MessageHandler{topicChan: topicChan, authResponse: authResponse})
 
 	messageChans[topicChan] = make(chan *nsq.Message)
-	go func() {
-		err = consumer.ConnectToNSQLookupd(addr)
-		if err != nil {
-			log.Fatalf("Failed to connect to NSQ lookupd for %s: %v", topicChan, err)
-		}
-	}()
+
+	err = consumer.ConnectToNSQLookupd(addr)
+	if err != nil {
+		return -2
+	}
+	return 0
 }
 
 func processMessage(message *nsq.Message) ([]byte, error) {

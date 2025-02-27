@@ -93,7 +93,6 @@ func GetMessage(topic *C.char, channel *C.char, timeoutMS uint32) *C.char {
 	topicChan := fmt.Sprintf("%s:%s", t, ch)
 	// 确保通道存在
 	if _, ok := messageChans[topicChan]; !ok {
-		fmt.Printf("chan null\r\n")
 		return C.CString("")
 	}
 	var jsonBytes []byte
@@ -110,12 +109,10 @@ func GetMessage(topic *C.char, channel *C.char, timeoutMS uint32) *C.char {
 			jsonBytes, err = processMessage(message)
 		case <-time.After(time.Duration(timeoutMS) * time.Millisecond):
 			// 超时处理：返回空字符串或任何其他表示超时的方式
-			fmt.Printf("time out\r\n")
 			return C.CString("")
 		}
 	}
 	if err != nil {
-		log.Printf("Failed to marshal message info: %v", err)
 		return C.CString("{}")
 	}
 	return C.CString(string(jsonBytes))
@@ -143,10 +140,7 @@ func GetMessageBuf(topic *C.char, channel *C.char, timeoutMS uint32, buf *C.char
 
 //export ConfirmMessage
 func ConfirmMessage(topic *C.char, channel *C.char, id *C.char) {
-	//	t := C.GoString(topic)
-	//	ch := C.GoString(channel)
 	idStr := C.GoString(id)
-	//topicChan := fmt.Sprintf("%s:%s", t, ch)
 	if msg, ok := messageStore[idStr]; ok {
 		msg.Finish()
 		delete(messageStore, idStr)

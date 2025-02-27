@@ -5,13 +5,14 @@
 $topic = "NINEKE_KAENG_LOG";
 $channel = "test1";
 $lookupdAddr = "192.168.203.212:5501";
-StartNSQSubscriber($topic, $channel, $lookupdAddr,20,0);
+$client=new NsqClient();
+$client->startNSQSubscriber($topic, $channel, $lookupdAddr,20,0);
 // 定义一个函数来获取并处理消息
-function process_messages( $topic, $channel) {
+function process_messages($client, $topic, $channel) {
     while (true) {
         try {
             // 可能抛出异常的代码
-            $messageBody = getMessage($topic, $channel,1000,5000);
+            $messageBody = $client->getMessage($topic, $channel,1000,5000);
             
             if ($messageBody !== '') {
               
@@ -30,9 +31,9 @@ function process_messages( $topic, $channel) {
 }
 
 // 开始处理消息
-process_messages( $topic, $channel);
+process_messages($client,$topic, $channel);
 echo "exit\r\n";
 // 停止 NSQ 订阅者
-stopNSQSubscriber($topic, $channel);
+$client->stopNSQSubscriber($topic, $channel);
 
 

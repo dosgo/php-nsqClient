@@ -9,6 +9,7 @@
 #include "ext/standard/info.h"
 #include "php_libnsq.h"
 
+
 /* For compatibility with older PHP versions */
 #ifndef ZEND_PARSE_PARAMETERS_NONE
 #define ZEND_PARSE_PARAMETERS_NONE() \
@@ -16,7 +17,7 @@
 	ZEND_PARSE_PARAMETERS_END()
 #endif
 
-PHP_FUNCTION(startNsqSubscriber) {
+PHP_METHOD(NsqClient,startNsqSubscriber) {
     char *topic, *channel, *lookupd;
     size_t topic_len, channel_len, lookupd_len;
     zend_long max_attempts, auth_response;
@@ -43,7 +44,7 @@ PHP_FUNCTION(startNsqSubscriber) {
     RETURN_LONG(ret);
 }
 
-PHP_FUNCTION(getMessage) {
+PHP_METHOD(NsqClient,getMessage) {
     char *topic, *channel;
     size_t topic_len, channel_len;
     zend_long timeout_ms;
@@ -72,7 +73,7 @@ PHP_FUNCTION(getMessage) {
     }
 }
 
-PHP_FUNCTION(confirmMessage) {
+PHP_METHOD(NsqClient,confirmMessage) {
     char *topic, *channel, *id;
     size_t topic_len, channel_len, id_len;
     
@@ -88,7 +89,7 @@ PHP_FUNCTION(confirmMessage) {
     RETURN_TRUE;
 }
 
-PHP_FUNCTION(stopNsqSubscriber) {
+PHP_METHOD(NsqClient,stopNsqSubscriber) {
     char *topic, *channel;
     int argc = ZEND_NUM_ARGS();
     size_t topic_len, channel_len, id_len;
@@ -101,6 +102,10 @@ PHP_FUNCTION(stopNsqSubscriber) {
     StopNSQSubscriber((char *)topic, (char *)channel);
     RETURN_TRUE;
 }
+
+
+
+
 
 /* }}}*/
 
@@ -165,13 +170,29 @@ ZEND_END_ARG_INFO();
  */
 
 
-static zend_function_entry libnsq_functions[] = {
-    PHP_FE(startNsqSubscriber, arginfo_startNsqSubscriber)
-    PHP_FE(getMessage, arginfo_getMessage)
-    PHP_FE(confirmMessage, arginfo_confirmMessage)
-    PHP_FE(stopNsqSubscriber, arginfo_stopNsqSubscriber)
+
+
+zend_class_entry *nsqClient_ce; // 类入口指针
+
+static const zend_function_entry nsqClient_methods[] = {
+   // PHP_ME(NsqClient, __construct, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
+    PHP_ME(NsqClient, startNsqSubscriber, arginfo_startNsqSubscriber, ZEND_ACC_PUBLIC)
+	PHP_ME(NsqClient, getMessage, arginfo_getMessage, ZEND_ACC_PUBLIC)
+	PHP_ME(NsqClient, confirmMessage, arginfo_confirmMessage, ZEND_ACC_PUBLIC)
+	PHP_ME(NsqClient, stopNsqSubscriber, arginfo_stopNsqSubscriber, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
+
+
+PHP_MINIT_FUNCTION(libnsq) {
+    zend_class_entry ce;
+    // 定义类名和构造函数（可选）
+    INIT_CLASS_ENTRY(ce, "NsqClient", nsqClient_methods);
+    nsqClient_ce = zend_register_internal_class(&ce);
+    return SUCCESS;
+}
+
+
 
 /* }}} */
 
@@ -180,8 +201,8 @@ static zend_function_entry libnsq_functions[] = {
 zend_module_entry libnsq_module_entry = {
 	STANDARD_MODULE_HEADER,
 	"libnsq",					/* Extension name */
-	libnsq_functions,			/* zend_function_entry */
-	NULL,							/* PHP_MINIT - Module initialization */
+	NULL,			/* zend_function_entry */
+	PHP_MINIT(libnsq),							/* PHP_MINIT - Module initialization */
 	NULL,							/* PHP_MSHUTDOWN - Module shutdown */
 	PHP_RINIT(libnsq),			/* PHP_RINIT - Request initialization */
 	NULL,							/* PHP_RSHUTDOWN - Request shutdown */
@@ -189,6 +210,8 @@ zend_module_entry libnsq_module_entry = {
 	PHP_LIBNSQ_VERSION,		/* Version */
 	STANDARD_MODULE_PROPERTIES
 };
+
+
 /* }}} */
 
 #ifdef COMPILE_DL_LIBNSQ

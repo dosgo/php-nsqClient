@@ -1,7 +1,20 @@
+/* libnsq extension for PHP */
+
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include "php.h"
-#include "php_libNsq.h"
-#include "libnsq_subscriber.h"
-ZEND_DECLARE_MODULE_GLOBALS(libNsq)
+#include "zend_exceptions.h"
+#include "ext/standard/info.h"
+#include "php_libnsq.h"
+
+/* For compatibility with older PHP versions */
+#ifndef ZEND_PARSE_PARAMETERS_NONE
+#define ZEND_PARSE_PARAMETERS_NONE() \
+	ZEND_PARSE_PARAMETERS_START(0, 0) \
+	ZEND_PARSE_PARAMETERS_END()
+#endif
 
 PHP_FUNCTION(startNsqSubscriber) {
     char *topic, *channel, *lookupd;
@@ -34,20 +47,27 @@ PHP_FUNCTION(getMessage) {
     char *topic, *channel;
     size_t topic_len, channel_len;
     zend_long timeout_ms;
-
-    if (zend_parse_parameters(ZEND_NUM_ARGS(), "ssl", 
-        &topic, &topic_len,
-        &channel, &channel_len,
-        &timeout_ms) == FAILURE) {
+	zend_long buf_len=5000;
+    if (zend_parse_parameters(ZEND_NUM_ARGS(), "ssl|l", &topic, &topic_len,&channel, &channel_len,&timeout_ms,&buf_len) == FAILURE) {
         RETURN_NULL();
     }
 
-    char *result = GetMessage(topic, channel, (uint32_t)timeout_ms);
-    
-    if(result) {
-        RETURN_STRING(result);
-        FreeMessage(result); // PHP 字符串复制后立即释放
+    char* buf = (char*)malloc(buf_len+1);
+    if (buf == NULL) {
+		zend_throw_exception(zend_ce_exception, "memory allocation failed", 0);
+        RETURN_NULL();
+    }
+	memset(buf, 0,buf_len+1); 
+	int resLen=GetMessageBuf(topic,channel, (uint32_t)timeout_ms, buf , buf_len);
+    if(resLen > 0) {
+        RETURN_STRING(buf);
+		free(buf);
     } else {
+		free(buf);
+		if(resLen==-2){
+			//php_error_docref0(NULL TSRMLS_CC, E_ERROR, "Fatal error: buf_len is not long enough");
+			zend_throw_exception(zend_ce_exception, "buf_len is not long enough", 0);
+		}
         RETURN_NULL();
     }
 }
@@ -82,21 +102,98 @@ PHP_FUNCTION(stopNsqSubscriber) {
     RETURN_TRUE;
 }
 
+/* }}}*/
 
-// 模块入口
-zend_module_entry libNsq_module_entry = {
-    STANDARD_MODULE_HEADER,
-    "libNsq",                  // 扩展名称
-    NULL,                       // 函数列表（在ZEND_BEGIN_MODULE_GLOBALS中定义）
-    NULL,                       // 模块初始化
-    NULL,                       // 模块关闭
-    NULL,                       // 请求初始化
-    NULL,                       // 请求关闭
-    NULL,                       // 模块信息
-    "1.0",                      // 版本号
-    STANDARD_MODULE_PROPERTIES
+/* {{{ PHP_RINIT_FUNCTION
+ */
+PHP_RINIT_FUNCTION(libnsq)
+{
+#if defined(ZTS) && defined(COMPILE_DL_LIBNSQ)
+	ZEND_TSRMLS_CACHE_UPDATE();
+#endif
+
+	return SUCCESS;
+}
+/* }}} */
+
+/* {{{ PHP_MINFO_FUNCTION
+ */
+PHP_MINFO_FUNCTION(libnsq)
+{
+	php_info_print_table_start();
+	php_info_print_table_header(2, "libnsq support", "enabled");
+	php_info_print_table_end();
+}
+/* }}} */
+
+/* {{{ arginfo
+ */
+
+
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_startNsqSubscriber, 0, 5, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, topic, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, channel, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, lookupd, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, max_attempts, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, auth_response, IS_LONG, 0)
+ZEND_END_ARG_INFO();
+
+// 为 getMessage 函数定义参数信息
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_getMessage, 0, 3, IS_STRING, 1)
+    ZEND_ARG_TYPE_INFO(0, topic, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, channel, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, timeout_ms, IS_LONG, 0)
+ZEND_END_ARG_INFO();
+
+// 为 confirmMessage 定义参数信息
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_confirmMessage, 0, 3, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, topic, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, channel, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, id, IS_STRING, 0)
+ZEND_END_ARG_INFO();
+
+// 为 stopNsqSubscriber 定义参数信息
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_stopNsqSubscriber, 0, 2, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, topic, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, channel, IS_STRING, 0)
+ZEND_END_ARG_INFO();
+
+/* }}} */
+
+/* {{{ libnsq_functions[]
+ */
+
+
+static zend_function_entry libnsq_functions[] = {
+    PHP_FE(startNsqSubscriber, arginfo_startNsqSubscriber)
+    PHP_FE(getMessage, arginfo_getMessage)
+    PHP_FE(confirmMessage, arginfo_confirmMessage)
+    PHP_FE(stopNsqSubscriber, arginfo_stopNsqSubscriber)
+    PHP_FE_END
 };
 
-#ifdef COMPILE_DL_libNsq
-ZEND_GET_MODULE(libNsq)
+/* }}} */
+
+/* {{{ libnsq_module_entry
+ */
+zend_module_entry libnsq_module_entry = {
+	STANDARD_MODULE_HEADER,
+	"libnsq",					/* Extension name */
+	libnsq_functions,			/* zend_function_entry */
+	NULL,							/* PHP_MINIT - Module initialization */
+	NULL,							/* PHP_MSHUTDOWN - Module shutdown */
+	PHP_RINIT(libnsq),			/* PHP_RINIT - Request initialization */
+	NULL,							/* PHP_RSHUTDOWN - Request shutdown */
+	PHP_MINFO(libnsq),			/* PHP_MINFO - Module info */
+	PHP_LIBNSQ_VERSION,		/* Version */
+	STANDARD_MODULE_PROPERTIES
+};
+/* }}} */
+
+#ifdef COMPILE_DL_LIBNSQ
+# ifdef ZTS
+ZEND_TSRMLS_CACHE_DEFINE()
+# endif
+ZEND_GET_MODULE(libnsq)
 #endif

@@ -2,14 +2,17 @@ package main
 
 /*
 #include <stdlib.h>
+#include <string.h>
 */
 import "C"
 import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"time"
+	"unsafe"
 
 	"github.com/nsqio/go-nsq"
 )
@@ -57,6 +60,8 @@ func StartNSQSubscriber(topic *C.char, channel *C.char, lookupdAddr *C.char, max
 		if err != nil {
 			return -1
 		}
+		logger := log.New(io.Discard, "", log.LstdFlags)
+		consumer.SetLogger(logger, 0)
 		consumers[topicChan] = consumer
 	}
 
@@ -88,7 +93,8 @@ func GetMessage(topic *C.char, channel *C.char, timeoutMS uint32) *C.char {
 	topicChan := fmt.Sprintf("%s:%s", t, ch)
 	// 确保通道存在
 	if _, ok := messageChans[topicChan]; !ok {
-		return C.CString(string(""))
+		fmt.Printf("chan null\r\n")
+		return C.CString("")
 	}
 	var jsonBytes []byte
 	var err error
@@ -104,6 +110,7 @@ func GetMessage(topic *C.char, channel *C.char, timeoutMS uint32) *C.char {
 			jsonBytes, err = processMessage(message)
 		case <-time.After(time.Duration(timeoutMS) * time.Millisecond):
 			// 超时处理：返回空字符串或任何其他表示超时的方式
+			fmt.Printf("time out\r\n")
 			return C.CString("")
 		}
 	}
@@ -111,9 +118,27 @@ func GetMessage(topic *C.char, channel *C.char, timeoutMS uint32) *C.char {
 		log.Printf("Failed to marshal message info: %v", err)
 		return C.CString("{}")
 	}
-
-	// 返回 JSON 字符串
 	return C.CString(string(jsonBytes))
+}
+
+//export GetMessageBuf
+func GetMessageBuf(topic *C.char, channel *C.char, timeoutMS uint32, buf *C.char, bufSize uint32) C.int {
+	if buf == nil || bufSize <= 0 {
+		return C.int(-1)
+	}
+	var data *C.char = GetMessage(topic, channel, timeoutMS)
+
+	if int(C.strlen(data)) > int(bufSize) {
+		return C.int(-2)
+	}
+
+	C.memcpy(
+		unsafe.Pointer(buf),        // 目标指针
+		unsafe.Pointer(data),       // 源指针
+		C.size_t(C.strlen(data)+1), // 复制长度（含 \0）
+	)
+	// 返回 JSON 字符串
+	return C.int(C.strlen(data))
 }
 
 //export ConfirmMessage
